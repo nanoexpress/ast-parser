@@ -1,20 +1,20 @@
 /* globals describe, it, expect */
-import astParser from "./ast-parser";
+import astParser from './ast-parser';
 
-describe("basic functionality", () => {
-  it("sync empty function - string", () => {
+describe('basic functionality', () => {
+  it('sync empty function - string', () => {
     expect(
       astParser((req, res) => {
-        res.end("simple");
+        res.end('simple');
       })
     ).toEqual({
       async: false,
       generator: false,
       req: true,
-      res: { end: "simple" }
+      res: { end: 'simple' }
     });
   });
-  it("sync empty function - number", () => {
+  it('sync empty function - number', () => {
     expect(
       astParser((req, res) => {
         res.end(1234);
@@ -26,7 +26,7 @@ describe("basic functionality", () => {
       res: { end: 1234 }
     });
   });
-  it("sync empty function - boolean", () => {
+  it('sync empty function - boolean', () => {
     expect(
       astParser((req, res) => {
         res.end(false);
@@ -38,7 +38,7 @@ describe("basic functionality", () => {
       res: { end: false }
     });
   });
-  it("sync empty function - object", () => {
+  it('sync empty function - object', () => {
     expect(
       astParser((req, res) => {
         res.send({ ok: true });
@@ -50,34 +50,77 @@ describe("basic functionality", () => {
       res: { send: { ok: true } }
     });
   });
-  it("sync empty function - array", () => {
+  it('sync empty function - array', () => {
     expect(
       astParser((req, res) => {
-        res.send([["ok"], [true]]);
+        res.send([['ok'], [true]]);
       })
     ).toEqual({
       async: false,
       generator: false,
       req: true,
-      res: { send: [["ok"], [true]] }
+      res: { send: [['ok'], [true]] }
     });
   });
-  it("sync empty function - Buffer", () => {
+  it('sync empty function - Buffer', () => {
     expect(
       astParser((req, res) => {
-        res.end(Buffer.from("buffer"));
+        res.end(Buffer.from('buffer'));
       })
     ).toEqual({
       async: false,
       generator: false,
       req: true,
-      res: { end: Buffer.from("buffer") }
+      res: { end: Buffer.from('buffer') }
     });
   });
-  it("sync empty function - next args", () => {
+  it('sync empty function - Buffer.toJSON()', () => {
+    expect(
+      astParser((req, res) => {
+        res.end(Buffer.from('buffer').toJSON());
+      })
+    ).toEqual({
+      async: false,
+      generator: false,
+      req: true,
+      res: { end: Buffer.from('buffer').toJSON() }
+    });
+  });
+  it('sync empty function - Buffer.byteLength', () => {
+    expect(
+      astParser((req, res) => {
+        res.end(Buffer.from('buffer').byteLength);
+      })
+    ).toEqual({
+      async: false,
+      generator: false,
+      req: true,
+      res: { end: Buffer.from('buffer').byteLength }
+    });
+  });
+  it('!!! sync empty function - Buffer(req.body).toJSON()', () => {
+    expect(
+      astParser((req, res) => {
+        res.end(Buffer.from(req.body).toJSON());
+      })
+    ).toEqual({
+      async: false,
+      generator: false,
+      req: { body: true },
+      res: {
+        end: [
+          {
+            $reference: ['req', 'body'],
+            $callee: ['Buffer', 'from', 'toJSON']
+          }
+        ]
+      }
+    });
+  });
+  it('sync empty function - next args', () => {
     expect(
       astParser((req, res, next) => {
-        req.foo = "foo";
+        req.foo = 'foo';
         next(null, true);
       })
     ).toEqual({

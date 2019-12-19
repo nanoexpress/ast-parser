@@ -1,5 +1,5 @@
-import { parse, convertArray, convertObject, convertProperty } from "./helpers";
-import { simple as simpleParse } from "acorn-walk";
+import { parse, convertArray, convertObject, convertProperty } from './helpers';
+import { simple as simpleParse } from 'acorn-walk';
 
 export default function nanoexpressAstParser(
   rawFunction,
@@ -18,7 +18,7 @@ export default function nanoexpressAstParser(
       : Object.assign({}, inputSource)
     : {};
 
-  simpleParse(parsed, {
+  const parserMap = {
     ArrowFunctionExpression({ params }) {
       for (const { name } of params) {
         if (source[name] === undefined) {
@@ -29,7 +29,7 @@ export default function nanoexpressAstParser(
     MemberExpression({ object, property }) {
       const itemId = object.object ? object.object.name : object.name;
 
-      if (itemId === "req" || itemId === "res") {
+      if (itemId === 'req' || itemId === 'res') {
         const value = convertProperty(property);
 
         if (value === null) {
@@ -37,7 +37,7 @@ export default function nanoexpressAstParser(
         }
 
         let propKey;
-        const subtree = object.type === "MemberExpression";
+        const subtree = object.type === 'MemberExpression';
 
         if (object.property) {
           propKey = object.property.name;
@@ -79,9 +79,9 @@ export default function nanoexpressAstParser(
         }
 
         if (bodyContent && bodyContent.length > 0) {
-          for (const { type, expression } of bodyContent) {
-            if (type === "ExpressionStatement") {
-              const { callee, arguments: args } = expression;
+          for (const bodyItem of bodyContent) {
+            if (bodyItem.type === 'ExpressionStatement') {
+              const { callee, arguments: args } = bodyItem.expression;
 
               if (callee && callee.object) {
                 const itemId = callee.object.object
@@ -99,32 +99,26 @@ export default function nanoexpressAstParser(
 
                 let infoValue = infoItem[method];
 
-                for (const {
-                  type,
-                  properties,
-                  elements,
-                  value,
-                  callee,
-                  arguments: childArgs
-                } of args) {
+                for (const arg of args) {
                   if (infoValue === true || !infoValue) {
                     infoValue = {};
                     infoItem[method] = infoValue;
                   }
 
-                  if (type === "ObjectExpression") {
-                    if (properties.length > 0) {
-                      infoItem[method] = convertObject(properties);
+                  if (arg.type === 'ObjectExpression') {
+                    if (arg.properties.length > 0) {
+                      infoItem[method] = convertObject(arg.properties);
                     }
-                  } else if (type === "ArrayExpression") {
-                    infoItem[method] = convertArray(elements);
-                  } else if (type === "Literal") {
-                    infoItem[method] = value;
-                  } else if (type === "CallExpression") {
+                  } else if (arg.type === 'ArrayExpression') {
+                    infoItem[method] = convertArray(arg.elements);
+                  } else if (arg.type === 'Literal') {
+                    infoItem[method] = arg.value;
+                  } else if (arg.type === 'CallExpression') {
+                    infoItem[method] = convertProperty(arg);
+                  } else if (arg.type === 'MemberExpression') {
                     infoItem[method] = convertProperty({
-                      type,
-                      callee,
-                      arguments: childArgs
+                      type: 'CallExpression',
+                      callee: arg
                     });
                   }
                 }
@@ -134,7 +128,9 @@ export default function nanoexpressAstParser(
         }
       }
     }
-  });
+  };
+
+  simpleParse(parsed, parserMap);
 
   return source;
 }

@@ -1,10 +1,36 @@
 // eslint-disable-next-line no-unused-vars
-function convertGlobalScope([$main, $method, $methodsRest], value) {
-  if ($main === "Buffer") {
-    return Buffer[$method](...value);
+function convertGlobalScope([$main, $method, $methodsRest], values) {
+  let _chain = null;
+
+  if (
+    values &&
+    values.some((value) => value.$reference || value.length === undefined)
+  ) {
+    return values.map((scopes) => {
+      if (scopes.length === undefined) {
+        scopes.$callee = [$main, $method, $methodsRest];
+      }
+      return scopes;
+    });
   }
 
-  return null;
+  if ($main === 'Buffer') {
+    _chain = Buffer[$method](values.shift());
+  }
+  if (_chain && $methodsRest) {
+    const _chainCheck = _chain[$methodsRest];
+
+    const _checkValue = values.shift();
+    if (typeof _chainCheck === 'function') {
+      _chain = _checkValue
+        ? _chainCheck.call(_chain, _checkValue)
+        : _chainCheck.call(_chain);
+    } else {
+      _chain = _checkValue ? _chainCheck[_checkValue] : _chainCheck;
+    }
+  }
+
+  return _chain;
 }
 
 function convertProperty({
@@ -18,25 +44,43 @@ function convertProperty({
   callee,
   arguments: args
 }) {
-  if (type === "Identifier") {
+  const str = JSON.stringify(
+    { type, name, value, properties, elements, object, property, callee, args },
+    null,
+    4
+  );
+
+  // str.indexOf('"byteLength') > -1 && console.log('$byte', str);
+  // str.indexOf('body') > -1 && console.log('$req.body', str);
+
+  if (type === 'Identifier') {
     return name;
-  } else if (type === "Literal") {
+  } else if (type === 'Literal') {
     return value;
-  } else if (type === "MemberExpression") {
+  } else if (type === 'MemberExpression') {
+    if (object.callee) {
+      const ref = convertProperty(object.callee);
+      ref.$reference.push(property.name);
+      ref.$args = object.arguments.map(convertProperty);
+
+      return ref;
+    }
     return {
       $reference: [object.name, property.name]
     };
-  } else if (type === "ObjectExpression") {
+  } else if (type === 'ObjectExpression') {
     return convertObject(properties);
-  } else if (type === "ArrayExpression") {
+  } else if (type === 'ArrayExpression') {
     return convertArray(elements);
-  } else if (type === "Property") {
+  } else if (type === 'Property') {
     return convertProperty(value);
-  } else if (type === "CallExpression") {
-    const { $reference: calleeReference } = convertProperty(callee);
-    const value = args.map(convertProperty);
+  } else if (type === 'CallExpression') {
+    const { $reference: calleeReference, $args } = convertProperty(callee);
+    const callValue = args && args.map(convertProperty);
+    const callArgument =
+      callValue && $args ? callValue.concat($args) : callValue || $args;
 
-    return convertGlobalScope(calleeReference, value);
+    return convertGlobalScope(calleeReference, callArgument);
   } else {
     return null;
   }
@@ -52,4 +96,4 @@ function convertArray(elements) {
   return elements.map(convertProperty);
 }
 
-export { convertProperty, convertArray, convertObject };
+export { convertGlobalScope, convertProperty, convertArray, convertObject };

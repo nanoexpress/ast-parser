@@ -1,5 +1,5 @@
 /* globals describe, it, expect */
-import astParser from './ast-parser';
+import astParser, { EXISTS } from './ast-parser';
 
 describe('basic functionality', () => {
   it('sync empty function - string', () => {
@@ -10,7 +10,7 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: true,
+      req: EXISTS,
       res: { end: 'simple' }
     });
   });
@@ -22,7 +22,7 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: true,
+      req: EXISTS,
       res: { end: 1234 }
     });
   });
@@ -34,7 +34,7 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: true,
+      req: EXISTS,
       res: { end: false }
     });
   });
@@ -46,7 +46,7 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: true,
+      req: EXISTS,
       res: { send: { ok: true } }
     });
   });
@@ -58,7 +58,7 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: true,
+      req: EXISTS,
       res: { send: [['ok'], [true]] }
     });
   });
@@ -70,7 +70,7 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: true,
+      req: EXISTS,
       res: { end: Buffer.from('buffer') }
     });
   });
@@ -82,7 +82,7 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: true,
+      req: EXISTS,
       res: { end: Buffer.from('buffer').toJSON() }
     });
   });
@@ -94,7 +94,7 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: true,
+      req: EXISTS,
       res: { end: Buffer.from('buffer').byteLength }
     });
   });
@@ -106,7 +106,7 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: { body: true },
+      req: { body: EXISTS },
       res: {
         end: [
           {
@@ -126,9 +126,9 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: { foo: true },
-      res: true,
-      next: true
+      req: { foo: EXISTS },
+      res: EXISTS,
+      next: EXISTS
     });
   });
 });

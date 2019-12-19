@@ -1,6 +1,7 @@
 import { parse, convertArray, convertObject, convertProperty } from './helpers';
 import { simple as simpleParse } from 'acorn-walk';
 
+export const EXISTS = Symbol('EXISTS');
 export default function nanoexpressAstParser(
   rawFunction,
   inputSource,
@@ -22,7 +23,7 @@ export default function nanoexpressAstParser(
     ArrowFunctionExpression({ params }) {
       for (const { name } of params) {
         if (source[name] === undefined) {
-          source[name] = true;
+          source[name] = EXISTS;
         }
       }
     },
@@ -50,7 +51,7 @@ export default function nanoexpressAstParser(
 
         let infoValue;
         if (propKey) {
-          if (!infoItem[propKey] || infoItem[propKey] === true) {
+          if (!infoItem[propKey] || infoItem[propKey] === EXISTS) {
             infoItem[propKey] = {};
           }
           infoValue = infoItem[propKey];
@@ -60,10 +61,10 @@ export default function nanoexpressAstParser(
 
         if (infoValue === undefined) {
           if (!subtree) {
-            infoItem[value] = true;
+            infoItem[value] = EXISTS;
           }
         } else if (subtree) {
-          infoValue[value] = true;
+          infoValue[value] = EXISTS;
         }
       }
     },
@@ -100,7 +101,7 @@ export default function nanoexpressAstParser(
                 let infoValue = infoItem[method];
 
                 for (const arg of args) {
-                  if (infoValue === true || !infoValue) {
+                  if (infoValue === EXISTS || !infoValue) {
                     infoValue = {};
                     infoItem[method] = infoValue;
                   }

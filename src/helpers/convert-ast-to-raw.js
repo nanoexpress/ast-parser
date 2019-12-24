@@ -1,3 +1,7 @@
+const globalScopes = {
+  Buffer
+};
+
 // eslint-disable-next-line no-unused-vars
 function convertGlobalScope([$main, $method, $methodsRest], values) {
   let _chain = null;
@@ -14,14 +18,15 @@ function convertGlobalScope([$main, $method, $methodsRest], values) {
     });
   }
 
-  if ($main === 'Buffer') {
-    _chain = Buffer[$method](values.shift());
+  if (globalScopes[$main]) {
+    _chain = globalScopes[$main];
   }
+  _chain = _chain[$method](values.shift());
   if (_chain && $methodsRest) {
     const _chainCheck = _chain[$methodsRest];
 
     const _checkValue = values.shift();
-    if (typeof _chainCheck === 'function') {
+    if (typeof _chainCheck === "function") {
       _chain = _checkValue
         ? _chainCheck.call(_chain, _checkValue)
         : _chainCheck.call(_chain);
@@ -44,43 +49,46 @@ function convertProperty({
   callee,
   arguments: args
 }) {
-  const str = JSON.stringify(
-    { type, name, value, properties, elements, object, property, callee, args },
-    null,
-    4
-  );
-
-  // str.indexOf('"byteLength') > -1 && console.log('$byte', str);
-  // str.indexOf('body') > -1 && console.log('$req.body', str);
-
-  if (type === 'Identifier') {
+  if (type === "Identifier") {
     return name;
-  } else if (type === 'Literal') {
+  } else if (type === "Literal") {
     return value;
-  } else if (type === 'MemberExpression') {
+  } else if (type === "MemberExpression") {
     if (object.callee) {
       const ref = convertProperty(object.callee);
       ref.$reference.push(property.name);
       ref.$args = object.arguments.map(convertProperty);
 
+      if (globalScopes[ref.$reference[0]]) {
+        return convertGlobalScope(ref.$reference, ref.$args);
+      }
+
       return ref;
     }
+
+    if (globalScopes[object.name] && args) {
+      return convertGlobalScope(
+        [object.name, property.name],
+        args.map(convertProperty)
+      );
+    }
+
     return {
       $reference: [object.name, property.name]
     };
-  } else if (type === 'ObjectExpression') {
+  } else if (type === "ObjectExpression") {
     return convertObject(properties);
-  } else if (type === 'ArrayExpression') {
+  } else if (type === "ArrayExpression") {
     return convertArray(elements);
-  } else if (type === 'Property') {
+  } else if (type === "Property") {
     return convertProperty(value);
-  } else if (type === 'CallExpression') {
-    const { $reference: calleeReference, $args } = convertProperty(callee);
-    const callValue = args && args.map(convertProperty);
-    const callArgument =
-      callValue && $args ? callValue.concat($args) : callValue || $args;
-
-    return convertGlobalScope(calleeReference, callArgument);
+  } else if (type === "CallExpression") {
+    if (callee.arguments && args) {
+      callee.arguments = args.concat(callee.arguments);
+    } else if (!callee.arguments && args) {
+      callee.arguments = args;
+    }
+    return convertProperty(callee);
   } else {
     return null;
   }

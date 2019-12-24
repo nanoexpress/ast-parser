@@ -39,7 +39,7 @@
     "semi": ["error", "always"],
     "space-in-parens": ["error", "never"],
     "strict": [2, "never"],
-    "max-len": ["error", 120],
+    "max-len": ["error", 80],
     "require-atomic-updates": 0
   }
 }

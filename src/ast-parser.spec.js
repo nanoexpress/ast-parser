@@ -1,20 +1,32 @@
 /* globals describe, it, expect */
-import astParser, { EXISTS } from './ast-parser';
+import astParser, { REFERENCED, USED } from "./ast-parser";
 
-describe('basic functionality', () => {
-  it('sync empty function - string', () => {
+describe("basic functionality", () => {
+  it("async empty function - string", () => {
+    expect(
+      astParser(async (req, res) => {
+        res.end("simple");
+      })
+    ).toEqual({
+      async: true,
+      generator: false,
+      req: REFERENCED,
+      res: { end: "simple" }
+    });
+  });
+  it("sync empty function - string", () => {
     expect(
       astParser((req, res) => {
-        res.end('simple');
+        res.end("simple");
       })
     ).toEqual({
       async: false,
       generator: false,
-      req: EXISTS,
-      res: { end: 'simple' }
+      req: REFERENCED,
+      res: { end: "simple" }
     });
   });
-  it('sync empty function - number', () => {
+  it("sync empty function - number", () => {
     expect(
       astParser((req, res) => {
         res.end(1234);
@@ -22,11 +34,11 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: EXISTS,
+      req: REFERENCED,
       res: { end: 1234 }
     });
   });
-  it('sync empty function - boolean', () => {
+  it("sync empty function - boolean", () => {
     expect(
       astParser((req, res) => {
         res.end(false);
@@ -34,11 +46,11 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: EXISTS,
+      req: REFERENCED,
       res: { end: false }
     });
   });
-  it('sync empty function - object', () => {
+  it("sync empty function - object", () => {
     expect(
       astParser((req, res) => {
         res.send({ ok: true });
@@ -46,59 +58,75 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: EXISTS,
+      req: REFERENCED,
       res: { send: { ok: true } }
     });
   });
-  it('sync empty function - array', () => {
+  it("sync empty function - array", () => {
     expect(
       astParser((req, res) => {
-        res.send([['ok'], [true]]);
+        res.send([["ok"], [true]]);
       })
     ).toEqual({
       async: false,
       generator: false,
-      req: EXISTS,
-      res: { send: [['ok'], [true]] }
+      req: REFERENCED,
+      res: { send: [["ok"], [true]] }
     });
   });
-  it('sync empty function - Buffer', () => {
+  it("sync empty function - Buffer", () => {
     expect(
       astParser((req, res) => {
-        res.end(Buffer.from('buffer'));
+        res.end(Buffer.from("buffer"));
       })
     ).toEqual({
       async: false,
       generator: false,
-      req: EXISTS,
-      res: { end: Buffer.from('buffer') }
+      req: REFERENCED,
+      res: { end: Buffer.from("buffer") }
     });
   });
-  it('sync empty function - Buffer.toJSON()', () => {
+  it("sync empty function - Buffer.toJSON()", () => {
     expect(
       astParser((req, res) => {
-        res.end(Buffer.from('buffer').toJSON());
+        res.end(Buffer.from("buffer").toJSON());
       })
     ).toEqual({
       async: false,
       generator: false,
-      req: EXISTS,
-      res: { end: Buffer.from('buffer').toJSON() }
+      req: REFERENCED,
+      res: { end: Buffer.from("buffer").toJSON() }
     });
   });
-  it('sync empty function - Buffer.byteLength', () => {
+  it("sync empty function - Buffer.byteLength", () => {
     expect(
       astParser((req, res) => {
-        res.end(Buffer.from('buffer').byteLength);
+        res.end(Buffer.from("buffer").byteLength);
       })
     ).toEqual({
       async: false,
       generator: false,
-      req: EXISTS,
-      res: { end: Buffer.from('buffer').byteLength }
+      req: REFERENCED,
+      res: { end: Buffer.from("buffer").byteLength }
     });
   });
-  it('!!! sync empty function - Buffer(req.body).toJSON()', () => {
+  it("sync empty function - next args", () => {
+    expect(
+      astParser((req, res, next) => {
+        req.foo = "foo";
+        next(null, true);
+      })
+    ).toEqual({
+      async: false,
+      generator: false,
+      req: { foo: USED },
+      res: REFERENCED,
+      next: USED
+    });
+  });
+});
+describe("attributes reference", () => {
+  it("sync empty function - Buffer(req.body).toJSON()", () => {
     expect(
       astParser((req, res) => {
         res.end(Buffer.from(req.body).toJSON());
@@ -106,42 +134,105 @@ describe('basic functionality', () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: { body: EXISTS },
+      req: { body: USED },
       res: {
         end: [
           {
-            $reference: ['req', 'body'],
-            $callee: ['Buffer', 'from', 'toJSON']
+            $reference: ["req", "body"],
+            $callee: ["Buffer", "from", "toJSON"]
           }
         ]
       }
     });
   });
-  it('sync empty function - next args', () => {
+
+  it("sync empty function - req[attributes] reference", () => {
     expect(
       astParser((req, res, next) => {
-        req.foo = 'foo';
+        const { foo } = req.headers;
+
+        res.setHeader("value", foo);
         next(null, true);
       })
     ).toEqual({
       async: false,
       generator: false,
-      req: { foo: EXISTS },
-      res: EXISTS,
-      next: EXISTS
+      req: { headers: { foo: USED } },
+      res: {
+        setHeader: {
+          value: { $reference: ["req", "headers", "foo"] }
+        }
+      },
+      next: USED
+    });
+  });
+});
+describe("attributes parsing", () => {
+  it("async empty function - simple DB case without response", () => {
+    expect(
+      astParser(async (req, res, next) => {
+        // eslint-disable-next-line no-undef, no-unused-vars
+        const result = await sqlORM.find(req.body);
+        next(null, true);
+      })
+    ).toEqual({
+      async: true,
+      generator: false,
+      req: { body: USED },
+      res: REFERENCED,
+      next: USED
+    });
+  });
+  it("async empty function - simple DB case with response", () => {
+    expect(
+      astParser(async (req, res) => {
+        // eslint-disable-next-line no-undef
+        const result = await sqlORM.find(req.body);
+
+        res.send(result);
+      })
+    ).toEqual({
+      async: true,
+      generator: false,
+      req: { body: USED },
+      res: { send: USED }
+    });
+  });
+  it("async empty function - simple DB case with return response", () => {
+    expect(
+      // eslint-disable-next-line no-unused-vars
+      astParser(async (req, res) => {
+        // eslint-disable-next-line no-undef
+        const result = await sqlORM.find(req.body);
+
+        return result;
+      })
+    ).toEqual({
+      async: true,
+      generator: false,
+      req: { body: USED },
+      res: REFERENCED
+    });
+  });
+  it("sync empty function - req[attributes] parsing", () => {
+    expect(
+      astParser((req, res, next) => {
+        // eslint-disable-next-line no-unused-vars
+        const { foo } = req.headers;
+        next(null, true);
+      })
+    ).toEqual({
+      async: false,
+      generator: false,
+      req: { headers: { foo: REFERENCED } },
+      res: REFERENCED,
+      next: USED
     });
   });
 });
 
 /*
 describe("compile basic functionality", () => {
-  it("req.path async", () => {
-    expect(
-      astParser(async (req, res) => {
-        const path1 = req.path;
-      })
-    ).toEqual({ async: true, generator: false, req: { path: true } });
-  });
   it("req.path async+await", () => {
     expect(
       astParser(async (req, res) => {

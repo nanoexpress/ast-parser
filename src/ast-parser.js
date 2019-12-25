@@ -20,6 +20,7 @@ export default function nanoexpressAstParser(
       ? inputSource
       : Object.assign({}, inputSource)
     : {};
+  const expressionsMap = [];
 
   const parserMap = {
     ArrowFunctionExpression({ params }) {
@@ -46,14 +47,18 @@ export default function nanoexpressAstParser(
           propKey = object.property.name;
         }
 
-        if (!source[itemId] || subtree) {
+        if (!source[itemId]) {
           source[itemId] = {};
         }
         const infoItem = source[itemId];
 
         let infoValue;
         if (propKey) {
-          if (!infoItem[propKey] || infoItem[propKey] === REFERENCED) {
+          if (
+            !infoItem[propKey] ||
+            infoItem[propKey] === REFERENCED ||
+            infoItem[propKey] === USED
+          ) {
             infoItem[propKey] = {};
           }
           infoValue = infoItem[propKey];
@@ -61,26 +66,12 @@ export default function nanoexpressAstParser(
           infoValue = infoItem[value];
         }
 
-        if (infoValue === undefined) {
-          if (!subtree) {
-            if (propKey) {
-              infoItem[propKey] = REFERENCED;
-            } else {
-              infoItem[value] = REFERENCED;
-            }
-          } else {
-            if (propKey) {
-              infoItem[propKey] = REFERENCED;
-            } else {
-              infoItem[value] = USED;
-            }
+        if (propKey) {
+          if (infoValue) {
+            infoValue[value] = subtree ? USED : REFERENCED;
           }
-        } else if (subtree) {
-          if (propKey) {
-            infoItem[propKey] = USED;
-          } else {
-            infoItem[value] = USED;
-          }
+        } else {
+          infoItem[value] = subtree ? USED : REFERENCED;
         }
       }
     },
@@ -96,7 +87,6 @@ export default function nanoexpressAstParser(
         }
 
         if (bodyContent && bodyContent.length > 0) {
-          const expressionsMap = [];
           for (const bodyItem of bodyContent) {
             if (bodyItem.type === "ExpressionStatement") {
               const { type, callee, arguments: args } = bodyItem.expression;
@@ -119,6 +109,17 @@ export default function nanoexpressAstParser(
                   const [key, result] = convertArray(args);
                   const [, resultType] = args.map((arg) => arg.type);
 
+                  // If $reference was referenced by mismatch
+                  // just ignore to improve performance
+                  // and reduce cycle
+                  if (
+                    result.$reference &&
+                    result.$reference[0] === undefined &&
+                    result.$reference.length > 1
+                  ) {
+                    return null;
+                  }
+
                   infoItem[method] = {};
                   const infoValue = infoItem[method];
 
@@ -139,10 +140,85 @@ export default function nanoexpressAstParser(
                 } else {
                   const value = args.shift();
 
-                  if (value.type === "Identifier") {
-                    infoItem[method] = USED;
+                  const expressionItem = expressionsMap.find(
+                    (map) => map.link[value.name]
+                  );
+
+                  if (expressionItem) {
+                    expressionItem.link[value.name] = USED;
+                    infoItem[method] = {
+                      $reference: expressionItem.$reference
+                    };
                   } else {
-                    infoItem[method] = convertProperty(value);
+                    const valueProperty = convertProperty(value);
+
+                    if (value.type === "Identifier") {
+                      infoItem[method] = USED;
+                    } else if (value.type === "ObjectExpression") {
+                      if (typeof infoItem[method] !== "object") {
+                        infoItem[method] = {};
+                        const infoValue = infoItem[method];
+
+                        for (const key in valueProperty) {
+                          const val = valueProperty[key];
+
+                          let $refKey;
+                          const expressionValue = expressionsMap.find(
+                            (expression) => {
+                              if (expression.$ref) {
+                                const { $ref: rest, $reference } = expression;
+
+                                if (
+                                  $reference[$reference.length - 1] !== key &&
+                                  rest[rest.length - 1] === key
+                                ) {
+                                  $refKey = $reference[$reference.length - 1];
+                                }
+                              }
+
+                              return (
+                                expression.link[key] || expression.link[$refKey]
+                              );
+                            }
+                          );
+
+                          if (expressionValue) {
+                            let $ref = expressionValue.$reference;
+                            const $refCharIndex = $ref.indexOf(
+                              $ref[$ref.length - 1]
+                            );
+
+                            if ($refCharIndex !== -1) {
+                              $ref = $ref.slice(0, $refCharIndex);
+                            }
+
+                            if ($refKey) {
+                              $ref.push($refKey);
+
+                              expressionValue.link[$refKey] = USED;
+                              infoValue[$refKey] = {
+                                $reference: $ref
+                              };
+                            } else {
+                              $ref.push(key);
+
+                              expressionValue.link[key] = USED;
+                              infoValue[key] = {
+                                $reference: $ref
+                              };
+                            }
+                          } else {
+                            infoValue[key] = val;
+                          }
+                        }
+                      }
+                    } else {
+                      if (valueProperty === null) {
+                        // Don't stop it here, keep passing
+                      } else {
+                        infoItem[method] = valueProperty;
+                      }
+                    }
                   }
                 }
               } else {
@@ -168,32 +244,76 @@ export default function nanoexpressAstParser(
                   if (initProperty === null) {
                     continue;
                   }
-                  const { $reference: ref } = initProperty;
+                  let { $reference: ref } = initProperty;
 
                   let link = source;
                   let prevLink;
                   let lastProperty;
-                  for (const property of ref) {
-                    prevLink = link;
-                    lastProperty = property;
+                  let reRef = false;
 
-                    link = link[property];
+                  if (!ref) {
+                    ref = convertArray(id.properties);
+                    ref.unshift(
+                      init.object && init.object.property
+                        ? init.object.propety.name
+                        : init.name
+                    );
+
+                    // console.log("$reRef", ref, declaration);
+                    reRef = true;
+                  }
+                  if (!ref[0] && init.object) {
+                    const { $reference: $reRef } = convertProperty(init.object);
+
+                    ref = $reRef.concat(init.property.name);
+
+                    ref = $reRef;
+                  }
+
+                  for (const property of ref) {
+                    if (link[property]) {
+                      prevLink = link;
+                      lastProperty = property;
+                      link = link[property];
+                    }
                   }
 
                   if (link === REFERENCED || link === USED) {
                     link = {};
                     prevLink[lastProperty] = link;
 
-                    const methodsRest = convertArray(id.properties);
+                    const methodsRest = id.properties
+                      ? convertArray(id.properties)
+                      : [convertProperty(id)];
+                    const $ref =
+                      id.properties &&
+                      ref.concat(id.properties.map((prop) => prop.value.name));
 
                     for (const method of methodsRest) {
                       link[method] = REFERENCED;
-
-                      expressionsMap.push({
-                        $reference: ref.concat(methodsRest),
-                        link
-                      });
                     }
+                    expressionsMap.push({
+                      $reference: reRef ? ref : ref.concat(methodsRest),
+                      $ref,
+                      link
+                    });
+                  } else if (link) {
+                    const methodsRest = id.properties
+                      ? convertArray(id.properties)
+                      : [convertProperty(id)];
+                    const $ref =
+                      id.properties &&
+                      ref.concat(id.properties.map((prop) => prop.value.name));
+
+                    for (const method of methodsRest) {
+                      link[method] = REFERENCED;
+                    }
+
+                    expressionsMap.push({
+                      $reference: reRef ? ref : ref.concat(methodsRest),
+                      $ref,
+                      link
+                    });
                   }
                 }
               }

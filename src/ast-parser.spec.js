@@ -26,6 +26,22 @@ describe("basic functionality", () => {
       res: { end: "simple" }
     });
   });
+  it("sync empty function - string w/ some references", () => {
+    expect(
+      astParser((req, res) => {
+        res.send("host is ", req.headers.host);
+      })
+    ).toEqual({
+      async: false,
+      generator: false,
+      req: {
+        headers: {
+          host: USED
+        }
+      },
+      res: { send: USED }
+    });
+  });
   it("sync empty function - number", () => {
     expect(
       astParser((req, res) => {
@@ -230,44 +246,139 @@ describe("attributes parsing", () => {
     });
   });
 });
-
-/*
-describe("compile basic functionality", () => {
-  it("req.path async+await", () => {
+describe("req[attributes] fetching", () => {
+  it("req.path reference", () => {
     expect(
-      astParser(async (req, res) => {
-        const val = await req.body;
+      astParser(async (req) => {
+        // eslint-disable-next-line no-unused-vars
+        const { path } = req;
       })
     ).toEqual({
       async: true,
       generator: false,
-      req: { body: true }
+      req: { path: REFERENCED }
     });
   });
-
-  it("req.path", () => {
+  it("req.path used", () => {
     expect(
-      astParser((req, res) => {
-        const path1 = req.path;
-        const path2 = req["path"];
-        const { path: path3 } = req;
+      astParser(async (req, res) => {
+        // eslint-disable-next-line no-unused-vars
+        const { path } = req;
+
+        res.end(path);
       })
-    ).toEqual({ async: false, generator: false, req: { path: true } });
+    ).toEqual({
+      async: true,
+      generator: false,
+      req: { path: USED },
+      res: {
+        end: {
+          $reference: ["req", "path"]
+        }
+      }
+    });
   });
-});
-
-describe("compile basic 2 functionality", () => {
-  it("req.headers.foo", () => {
+  it("req.headers simple referenced", () => {
     expect(
+      // eslint-disable-next-line no-unused-vars
       astParser((req, res) => {
-        const foo1 = req.headers.foo;
-        const foo2 = req.headers["foo"];
-        const { foo: foo3 } = req;
+        // eslint-disable-next-line no-unused-vars
+        const { foo } = req.headers;
       })
     ).toEqual({
       async: false,
       generator: false,
-      req: { headers: { foo: true } }
+      req: {
+        headers: {
+          foo: REFERENCED
+        }
+      },
+      res: REFERENCED
+    });
+  });
+  it("req.headers simple used", () => {
+    expect(
+      astParser((req, res) => {
+        const { foo } = req.headers;
+
+        res.end(foo);
+      })
+    ).toEqual({
+      async: false,
+      generator: false,
+      req: {
+        headers: {
+          foo: USED
+        }
+      },
+      res: {
+        end: {
+          $reference: ["req", "headers", "foo"]
+        }
+      }
+    });
+  });
+  it("req.headers complex referenced", () => {
+    expect(
+      // eslint-disable-next-line no-unused-vars
+      astParser((req, res) => {
+        // eslint-disable-next-line no-unused-vars
+        const foo1 = req.headers.foo1;
+        // eslint-disable-next-line no-unused-vars
+        const foo2 = req.headers["foo2"];
+        // eslint-disable-next-line no-unused-vars
+        const { foo3 } = req.headers;
+        // eslint-disable-next-line no-unused-vars
+        const { foo4: foo } = req.headers;
+      })
+    ).toEqual({
+      async: false,
+      generator: false,
+      req: {
+        headers: {
+          foo1: REFERENCED,
+          foo2: REFERENCED,
+          foo3: REFERENCED,
+          foo4: REFERENCED
+        }
+      },
+      res: REFERENCED
+    });
+  });
+  it("req.headers complex used", () => {
+    expect(
+      astParser((req, res) => {
+        const foo1 = req.headers.foo1;
+        const foo2 = req.headers["foo2"];
+        const { foo3 } = req.headers;
+        const { foo4: foo } = req.headers;
+
+        res.send({
+          foo1,
+          foo2,
+          foo3,
+          foo
+        });
+      })
+    ).toEqual({
+      async: false,
+      generator: false,
+      req: {
+        headers: {
+          foo1: USED,
+          foo2: USED,
+          foo3: USED,
+          foo4: USED
+        }
+      },
+      res: {
+        send: {
+          foo1: { $reference: ["req", "headers", "foo1"] },
+          foo2: { $reference: ["req", "headers", "foo2"] },
+          foo3: { $reference: ["req", "headers", "foo3"] },
+          foo4: { $reference: ["req", "headers", "foo4"] }
+        }
+      }
     });
   });
 });
@@ -281,6 +392,7 @@ describe("compile basic 3 functionality", () => {
     ).toEqual({
       async: false,
       generator: false,
+      req: REFERENCED,
       res: { send: { myJson: true } }
     });
   });
@@ -292,6 +404,7 @@ describe("compile basic 3 functionality", () => {
     ).toEqual({
       async: false,
       generator: false,
+      req: REFERENCED,
       res: { send: { foo: { bar: ["baz"] } } }
     });
   });
@@ -303,6 +416,7 @@ describe("compile basic 3 functionality", () => {
     ).toEqual({
       async: false,
       generator: false,
+      req: REFERENCED,
       res: { send: [{ bar: ["baz"] }] }
     });
   });
@@ -314,7 +428,7 @@ describe("compile basic 3 functionality", () => {
     ).toEqual({
       async: false,
       generator: false,
-      req: { body: true, method: true },
+      req: { body: USED, method: USED },
       res: {
         send: {
           myJson: { $reference: ["req", "body"] },
@@ -324,4 +438,3 @@ describe("compile basic 3 functionality", () => {
     });
   });
 });
-*/

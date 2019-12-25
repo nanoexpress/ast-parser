@@ -41,6 +41,7 @@ function convertGlobalScope([$main, $method, $methodsRest], values) {
 function convertProperty({
   type,
   name,
+  key,
   value,
   properties,
   elements,
@@ -81,7 +82,7 @@ function convertProperty({
   } else if (type === "ArrayExpression") {
     return convertArray(elements);
   } else if (type === "Property") {
-    return convertProperty(value);
+    return convertProperty(key.type === value.type ? key : value);
   } else if (type === "CallExpression") {
     if (callee.arguments && args) {
       callee.arguments = args.concat(callee.arguments);

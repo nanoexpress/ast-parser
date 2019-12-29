@@ -438,3 +438,48 @@ describe("compile basic 3 functionality", () => {
     });
   });
 });
+
+describe("more complex functinality", () => {
+  it("core methods args fetch for AoT compiling", () => {
+    expect(
+      astParser((req, res) => {
+        res.end("result is", 1234);
+      })
+    ).toEqual({
+      async: false,
+      generator: false,
+      req: REFERENCED,
+      res: {
+        end: ["result is", 1234]
+      }
+    });
+  });
+  it("core methods args fetch for AoT compiling #2", () => {
+    expect(
+      astParser((req, res) => {
+        res.end("result is " + 1234);
+      })
+    ).toEqual({
+      async: false,
+      generator: false,
+      req: REFERENCED,
+      res: {
+        end: "result is 1234"
+      }
+    });
+  });
+  it("core methods args fetch for AoT compiling #3", () => {
+    expect(
+      astParser((req, res) => {
+        res.end("result is " + 1234 + " or no? " + false);
+      })
+    ).toEqual({
+      async: false,
+      generator: false,
+      req: REFERENCED,
+      res: {
+        end: "result is 1234 or no? false"
+      }
+    });
+  });
+});

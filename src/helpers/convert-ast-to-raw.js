@@ -48,12 +48,17 @@ function convertProperty({
   object,
   property,
   callee,
-  arguments: args
+  arguments: args,
+  left,
+  operator,
+  right
 }) {
   if (type === "Identifier") {
     return name;
   } else if (type === "Literal") {
     return value;
+  } else if (type === "Property") {
+    return convertProperty(key.type === value.type ? key : value);
   } else if (type === "MemberExpression") {
     if (object.callee) {
       const ref = convertProperty(object.callee);
@@ -81,8 +86,8 @@ function convertProperty({
     return convertObject(properties);
   } else if (type === "ArrayExpression") {
     return convertArray(elements);
-  } else if (type === "Property") {
-    return convertProperty(key.type === value.type ? key : value);
+  } else if (type === "BinaryExpression") {
+    return convertBinary(left, operator, right);
   } else if (type === "CallExpression") {
     if (callee.arguments && args) {
       callee.arguments = args.concat(callee.arguments);
@@ -93,6 +98,19 @@ function convertProperty({
   } else {
     return null;
   }
+}
+function convertBinary(left, operator, right) {
+  const leftProperty = convertProperty(left);
+  const rightProperty = convertProperty(right);
+
+  if (operator === "+") {
+    return leftProperty + rightProperty;
+  }
+
+  throw new Error(
+    `Current Binary Operator ${operator} on
+    Left ${leftProperty} for Right ${rightProperty} operator`
+  );
 }
 function convertObject(properties) {
   const empty = {};

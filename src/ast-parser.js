@@ -1,5 +1,6 @@
 import { parse, convertArray, convertProperty } from "./helpers";
 import { simple as simpleParse } from "acorn-walk";
+import { resMethods } from "./core-methods";
 
 export const REFERENCED = Symbol("REFERENCED");
 export const USED = Symbol("USED");
@@ -105,7 +106,11 @@ export default function nanoexpressAstParser(
                   source[itemId] = infoItem;
                 }
 
-                if (args.length > 1) {
+                if (args.length > 1 && resMethods.indexOf(method) !== -1) {
+                  const argsConverted = convertArray(args);
+
+                  infoItem[method] = argsConverted;
+                } else if (args.length > 1) {
                   const [key, result] = convertArray(args);
                   const [, resultType] = args.map((arg) => arg.type);
 
@@ -154,6 +159,8 @@ export default function nanoexpressAstParser(
 
                     if (value.type === "Identifier") {
                       infoItem[method] = USED;
+                    } else if (value.type === "BinaryExpression") {
+                      infoItem[method] = valueProperty;
                     } else if (value.type === "ObjectExpression") {
                       if (typeof infoItem[method] !== "object") {
                         infoItem[method] = {};

@@ -25,10 +25,46 @@ export default function nanoexpressAstParser(
 
   const parserMap = {
     ArrowFunctionExpression({ params }) {
-      for (const { name } of params) {
-        if (source[name] === undefined) {
+      let index = 0;
+      for (const { name, type, properties } of params) {
+        if (type === "Identifier" && source[name] === undefined) {
           source[name] = REFERENCED;
+        } else if (type === "ObjectPattern") {
+          if (index > 0) {
+            continue;
+          }
+          let tree = index === 0 ? "req" : "res";
+          let link = source;
+
+          link[tree] = REFERENCED;
+
+          let parsed = convertArray(properties);
+
+          if (Array.isArray(parsed[0])) {
+            parsed = parsed.reduce((arr, item) => arr.concat(item));
+          }
+
+          if (parsed.length > 0) {
+            link[tree] = {};
+            link = link[tree];
+
+            for (let i = 0, len = parsed.length; i < len; i++) {
+              tree = parsed[i];
+
+              link[tree] = USED;
+
+              if (i === parsed.length - 1) {
+                break;
+              }
+
+              if (link[tree] === USED) {
+                link[tree] = {};
+                link = link[tree];
+              }
+            }
+          }
         }
+        index++;
       }
     },
     MemberExpression({ type, object, property }) {

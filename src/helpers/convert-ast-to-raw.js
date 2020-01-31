@@ -58,6 +58,19 @@ function convertProperty({
   } else if (type === "Literal") {
     return value;
   } else if (type === "Property") {
+    if (key.type !== value.type) {
+      if (value.properties) {
+        if (value.type === "ObjectPattern") {
+          const propKey = convertProperty(key);
+          const propValue = convertArray(value.properties);
+
+          if (propValue[0] !== propKey) {
+            propValue.unshift(propKey);
+          }
+          return propValue;
+        }
+      }
+    }
     return convertProperty(key.type === value.type ? key : value);
   } else if (type === "MemberExpression") {
     if (object.callee) {

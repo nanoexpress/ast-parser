@@ -277,6 +277,36 @@ describe("req[attributes] fetching", () => {
         }
       }
     });
+
+    expect(
+      astParser(async ({ path }, res) => {
+        // eslint-disable-next-line no-unused-vars
+        res.end(path);
+      })
+    ).toEqual({
+      async: true,
+      generator: false,
+      req: { path: USED },
+      res: {
+        end: USED
+      }
+    });
+  });
+
+  it("req.headers destructure used", () => {
+    expect(
+      astParser(async ({ headers: { foo } }, res) => {
+        // eslint-disable-next-line no-unused-vars
+        res.end(foo);
+      })
+    ).toEqual({
+      async: true,
+      generator: false,
+      req: { headers: { foo: USED } },
+      res: {
+        end: USED
+      }
+    });
   });
   it("req.headers simple referenced", () => {
     expect(

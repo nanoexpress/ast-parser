@@ -68,5 +68,5 @@ tests/coverage
 coverage
 
 # lock files
-# package-lock.json
-# yarn.lock
+package-lock.json
+yarn.lock
